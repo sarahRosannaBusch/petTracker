@@ -1,0 +1,56 @@
+unsigned int lastTime = 0; //to keep track of last publish time
+String txData; //all data is sent as one String in one publish event to minimize data costs
+
+void setup()
+{
+    Serial1.begin(9600); //default is 8 bits, no parity, 1 stop bit (which seems to be what the GPS sends)
+}
+
+void loop()
+{
+    unsigned int now = Time.now(); //current time as seconds since January 1, 1970 ("Unix time" or "epoch time") (not affected by timezone)
+    if(now > lastTime+300) //if it's been longer than 5min since last Fuel Gauge update
+    {
+        lastTime = now;
+        gpsData(); //get current gps data
+        fuelGauge(); //get battery levels
+        publish(); //publish all data to the Particle cloud
+    }
+}
+
+void gpsData()
+{
+    if (Serial1.available()) //.available gets the number of bytes that can be read on the serial port (64 bites can be held in the buffer)
+    {
+        //gll = Serial1.peek();
+        int gll = Serial1.read();
+        //gll = Serial1.readString();
+
+        txData = "Serial Data: " + String(gll);
+    }
+    else
+    {
+        txData = "Serial Data: not available";
+    }
+}
+
+void fuelGauge()
+{
+    FuelGauge fuel;
+    double batteryVoltage = fuel.getVCell();
+    double fuelLevel = fuel.getSoC(); //state of charge
+
+    txData += "<br>Battery Voltage: " + String::format("%.3f", batteryVoltage) + "V<br>";
+    txData += "Battery Level: " + String::format("%.1f", fuelLevel) + "%";
+}
+
+void publish()
+{
+    bool success;
+    success = Particle.publish("trackerData", txData);
+    if (!success)
+    {
+      // if event publish did not work
+      lastTime = 0; //so it will try again
+    }
+}
